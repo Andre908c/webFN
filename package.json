@@ -1,0 +1,26 @@
+{
+  "name": "simulador-bancario",
+  "version": "1.0.0",
+  "description": "Simulador Bancario Web con Node.js, Express y MySQL",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --watch app.js",
+    "test": "node test/health.test.js"
+  },
+  "keywords": [
+    "banking",
+    "simulator",
+    "express",
+    "mysql"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "mysql2": "^3.12.0"
+  }
+}
