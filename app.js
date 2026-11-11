@@ -29,10 +29,13 @@ app.use(
 // Servir archivos estáticos desde public/
 app.use(express.static(path.join(__dirname, 'public')));
 
+<<<<<<< HEAD
 // Rutas de autenticación
 const authRoutes = require('./routes/authRoutes');
 app.use('/api/auth', authRoutes);
 
+=======
+>>>>>>> 0ddbfc9c9fe74c7afac3d18a7dce6528a86099dd
 // Endpoint de salud y verificación de conexión a la base de datos
 app.get('/health', async (req, res) => {
   try {
