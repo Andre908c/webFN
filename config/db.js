@@ -1,14 +1,11 @@
 const mysql = require('mysql2');
 
-// Node.js lee automáticamente la MYSQL_URL que guardaste en el panel de Railway
-const connectionConfig = process.env.MYSQL_URL || {
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'banco_db',
-    port: 3306
-};
-
-const pool = mysql.createPool(connectionConfig);
+const pool = mysql.createPool(process.env.MYSQL_URL || {
+    host: process.env.MYSQLHOST || 'localhost',
+    user: process.env.MYSQLUSER || 'root',
+    password: process.env.MYSQLPASSWORD || '',
+    database: process.env.MYSQL_DATABASE || 'banco_db',
+    port: process.env.MYSQLPORT || 3306
+});
 
 module.exports = pool.promise();
