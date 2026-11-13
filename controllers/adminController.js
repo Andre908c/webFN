@@ -27,7 +27,10 @@ async function crearCliente(req, res) {
 
 async function cambiarEstado(req, res) {
   try {
-    const data = await adminService.cambiarEstadoCliente(req.params.id, req.body.estado);
+    const data = await adminService.cambiarEstadoCliente(
+      req.params.id,
+      req.body.estado
+    );
     res.json(data);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mi cuenta · Simulador Bancario</title>
+  <link rel="stylesheet" href="/css/main.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">SB</div>
+        <span>Banca virtual</span>
+      </div>
+      <div class="nav-actions">
+        <span class="muted" id="userLabel">—</span>
+        <a class="btn btn-ghost" href="/cajero/">Cajero</a>
+        <button class="btn btn-ghost" type="button" id="btnLogout">Salir</button>
+      </div>
+    </header>
+
+    <div id="alert" class="alert alert-error" hidden></div>
+
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab active" data-tab="resumen">Resumen</button>
+      <button type="button" class="tab" data-tab="movimientos">Movimientos</button>
+      <button type="button" class="tab" data-tab="transferir">Transferir</button>
+      <button type="button" class="tab" data-tab="seguridad">Seguridad</button>
+    </div>
+
+    <!-- Resumen -->
+    <section id="panel-resumen" class="panel active">
+      <div class="grid grid-2">
+        <div class="card hero-balance">
+          <div class="card-title">Saldo disponible</div>
+          <div class="stat-value" id="saldoValue">—</div>
+          <p class="muted" id="cuentaMeta" style="margin: 0.5rem 0 0;">—</p>
+        </div>
+        <div class="card">
+          <div class="card-title">Titular</div>
+          <h2 id="nombreValue" style="font-size: 1.35rem;">—</h2>
+          <p class="muted" id="emailValue" style="margin: 0.25rem 0 0;">—</p>
+          <p style="margin-top: 1rem; font-size: 0.9rem;" class="muted">
+            Solo puedes ver y operar tu propia cuenta.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Movimientos -->
+    <section id="panel-movimientos" class="panel">
+      <div class="card">
+        <h2 style="margin-bottom: 1rem;">Historial</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Descripción</th>
+                <th>Monto</th>
+              </tr>
+            </thead>
+            <tbody id="movBody">
+              <tr><td colspan="4" class="empty">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Transferir -->
+    <section id="panel-transferir" class="panel">
+      <div class="card" style="max-width: 480px;">
+        <h2 style="margin-bottom: 1rem;">Transferencia</h2>
+        <form id="formTransferir">
+          <label for="cuentaDestino">Número de cuenta destino</label>
+          <input id="cuentaDestino" required placeholder="1000000000000002" />
+
+          <label for="montoTransfer">Monto</label>
+          <input id="montoTransfer" type="number" min="1" step="1" required placeholder="50000" />
+
+          <label for="descTransfer">Descripción (opcional)</label>
+          <input id="descTransfer" placeholder="Pago / envío" />
+
+          <button class="btn btn-primary" type="submit">Enviar transferencia</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Seguridad -->
+    <section id="panel-seguridad" class="panel">
+      <div class="card" style="max-width: 480px;">
+        <h2 style="margin-bottom: 1rem;">Cambiar contraseña</h2>
+        <form id="formPassword">
+          <label for="passActual">Contraseña actual</label>
+          <input id="passActual" type="password" required autocomplete="current-password" />
+
+          <label for="passNueva">Contraseña nueva</label>
+          <input id="passNueva" type="password" required minlength="6" autocomplete="new-password" />
+
+          <button class="btn btn-primary" type="submit">Actualizar</button>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const alertEl = document.getElementById('alert');
+
+    document.querySelectorAll('.tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    async function requireCliente() {
+      try {
+        const { user } = await API.me();
+        if (user.rol !== 'CLIENTE') {
+          location.href = user.rol === 'ADMIN' ? '/admin/' : '/login.html';
+          return null;
+        }
+        return user;
+      } catch {
+        location.href = '/login.html';
+        return null;
+      }
+    }
+
+    async function loadResumen() {
+      const [perfil, saldo] = await Promise.all([API.perfil(), API.saldo()]);
+      document.getElementById('userLabel').textContent = perfil.nombre;
+      document.getElementById('nombreValue').textContent = perfil.nombre;
+      document.getElementById('emailValue').textContent = perfil.email;
+      document.getElementById('saldoValue').textContent = formatMoney(saldo.saldo);
+      document.getElementById('cuentaMeta').textContent =
+        `Cuenta ${saldo.numero_cuenta} · ${saldo.tipo} · ${saldo.estado}`;
+    }
+
+    async function loadMovimientos() {
+      const rows = await API.movimientos(30);
+      const body = document.getElementById('movBody');
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="4" class="empty">Sin movimientos</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map((m) => `
+        <tr>
+          <td>${formatDate(m.created_at)}</td>
+          <td>${m.tipo}</td>
+          <td>${m.descripcion || '—'}</td>
+          <td>${formatMoney(m.monto)}</td>
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('btnLogout').addEventListener('click', async () => {
+      try { await API.logout(); } catch (_) {}
+      location.href = '/login.html';
+    });
+
+    document.getElementById('formTransferir').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert(alertEl);
+      try {
+        const data = await API.transferir({
+          numero_cuenta_destino: document.getElementById('cuentaDestino').value.trim(),
+          monto: document.getElementById('montoTransfer').value,
+          descripcion: document.getElementById('descTransfer').value.trim()
+        });
+        showAlert(alertEl, data.mensaje + ' · Nuevo saldo: ' + formatMoney(data.saldo_nuevo_origen), 'ok');
+        e.target.reset();
+        await loadResumen();
+        await loadMovimientos();
+      } catch (err) {
+        showAlert(alertEl, err.message);
+      }
+    });
+
+    document.getElementById('formPassword').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert(alertEl);
+      try {
+        await API.cambiarPassword(
+          document.getElementById('passActual').value,
+          document.getElementById('passNueva').value
+        );
+        showAlert(alertEl, 'Contraseña actualizada', 'ok');
+        e.target.reset();
+      } catch (err) {
+        showAlert(alertEl, err.message);
+      }
+    });
+
+    (async () => {
+      const user = await requireCliente();
+      if (!user) return;
+      try {
+        await loadResumen();
+        await loadMovimientos();
+      } catch (err) {
+        showAlert(alertEl, err.message);
+      }
+    })();
+  </script>
+</body>
+</html>

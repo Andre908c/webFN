@@ -10,7 +10,9 @@ async function getDashboard() {
        SUM(estado = 'INACTIVO') AS inactivos
      FROM usuarios WHERE rol = 'CLIENTE'`
   );
-  const [[saldo]] = await db.query('SELECT COALESCE(SUM(saldo),0) AS saldo_total FROM cuentas');
+  const [[saldo]] = await db.query(
+    'SELECT COALESCE(SUM(saldo), 0) AS saldo_total FROM cuentas'
+  );
   return {
     total_clientes: Number(clientes.total),
     activos: Number(clientes.activos),
@@ -28,48 +30,65 @@ async function listarClientes(q = '') {
      FROM usuarios u
      LEFT JOIN cuentas c ON c.usuario_id = u.id
      WHERE u.rol = 'CLIENTE'
-       AND (u.nombre LIKE ? OR u.email LIKE ? OR c.numero_cuenta LIKE ?)
+       AND (u.nombre LIKE ? OR u.email LIKE ? OR IFNULL(c.numero_cuenta, '') LIKE ?)
      ORDER BY u.id`,
     [like, like, like]
   );
   return rows;
 }
 
-async function crearCliente({ nombre, email, password, numero_cuenta, saldo_inicial = 0, pin = 'password' }) {
+async function crearCliente({
+  nombre,
+  email,
+  password,
+  numero_cuenta,
+  saldo_inicial = 0,
+  pin = 'password'
+}) {
   if (!nombre || !email || !password || !numero_cuenta) {
     const err = new Error('Datos incompletos');
     err.status = 400;
     throw err;
   }
+
   const passwordHash = await bcrypt.hash(password, 10);
   const pinHash = await bcrypt.hash(pin, 10);
+  const saldoIni = Number(saldo_inicial) || 0;
+
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
+
     const [userResult] = await conn.query(
-      `INSERT INTO usuarios (nombre, email, password_hash, rol, estado) VALUES (?, ?, ?, 'CLIENTE', 'ACTIVO')`,
-      [nombre, email.toLowerCase(), passwordHash]
+      `INSERT INTO usuarios (nombre, email, password_hash, rol, estado)
+       VALUES (?, ?, ?, 'CLIENTE', 'ACTIVO')`,
+      [nombre, String(email).toLowerCase(), passwordHash]
     );
     const usuarioId = userResult.insertId;
-    await conn.query(
+
+    const [cuentaResult] = await conn.query(
       `INSERT INTO cuentas (numero_cuenta, usuario_id, saldo, pin_hash, tipo, estado)
        VALUES (?, ?, ?, ?, 'AHORROS', 'ACTIVO')`,
-      [numero_cuenta, usuarioId, Number(saldo_inicial) || 0, pinHash]
+      [numero_cuenta, usuarioId, saldoIni, pinHash]
     );
-    if (Number(saldo_inicial) > 0) {
-      const [c] = await conn.query('SELECT id FROM cuentas WHERE usuario_id = ?', [usuarioId]);
+
+    if (saldoIni > 0) {
       await conn.query(
-        `INSERT INTO movimientos (cuenta_id, tipo_movimiento, monto, saldo_anterior, saldo_posterior, descripcion)
+        `INSERT INTO movimientos
+          (cuenta_id, tipo_movimiento, monto, saldo_anterior, saldo_posterior, descripcion)
          VALUES (?, 'CONSIGNACION', ?, 0, ?, 'Saldo inicial')`,
-        [c[0].id, Number(saldo_inicial), Number(saldo_inicial)]
+        [cuentaResult.insertId, saldoIni, saldoIni]
       );
     }
+
     await conn.commit();
     return { id: usuarioId, nombre, email, numero_cuenta };
   } catch (err) {
     await conn.rollback();
     if (err.code === 'ER_DUP_ENTRY') {
-      throw Object.assign(new Error('Email o número de cuenta ya existe'), { status: 409 });
+      throw Object.assign(new Error('Email o número de cuenta ya existe'), {
+        status: 409
+      });
     }
     throw err;
   } finally {
@@ -93,7 +112,7 @@ async function cambiarEstadoCliente(id, estado) {
     err.status = 404;
     throw err;
   }
-  return { id, estado };
+  return { id: Number(id), estado };
 }
 
 async function consignar(numeroCuenta, monto, descripcion = 'Consignación administrativa') {
@@ -103,27 +122,40 @@ async function consignar(numeroCuenta, monto, descripcion = 'Consignación admin
     err.status = 400;
     throw err;
   }
+
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
+
     const [rows] = await conn.query(
       'SELECT id, saldo, estado FROM cuentas WHERE numero_cuenta = ? FOR UPDATE',
-      [numeroCuenta]
+      [String(numeroCuenta).trim()]
     );
     const cuenta = rows[0];
-    if (!cuenta) throw Object.assign(new Error('Cuenta no encontrada'), { status: 404 });
+    if (!cuenta) {
+      throw Object.assign(new Error('Cuenta no encontrada'), { status: 404 });
+    }
 
     const saldoAnt = Number(cuenta.saldo);
     const saldoPost = saldoAnt + cantidad;
 
-    await conn.query('UPDATE cuentas SET saldo = ? WHERE id = ?', [saldoPost, cuenta.id]);
+    await conn.query('UPDATE cuentas SET saldo = ? WHERE id = ?', [
+      saldoPost,
+      cuenta.id
+    ]);
     await conn.query(
-      `INSERT INTO movimientos (cuenta_id, tipo_movimiento, monto, saldo_anterior, saldo_posterior, descripcion)
+      `INSERT INTO movimientos
+        (cuenta_id, tipo_movimiento, monto, saldo_anterior, saldo_posterior, descripcion)
        VALUES (?, 'CONSIGNACION', ?, ?, ?, ?)`,
       [cuenta.id, cantidad, saldoAnt, saldoPost, descripcion]
     );
+
     await conn.commit();
-    return { numero_cuenta: numeroCuenta, monto: cantidad, saldo_nuevo: saldoPost };
+    return {
+      numero_cuenta: String(numeroCuenta).trim(),
+      monto: cantidad,
+      saldo_nuevo: saldoPost
+    };
   } catch (err) {
     await conn.rollback();
     throw err;

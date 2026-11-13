@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cajero · Simulador Bancario</title>
+  <link rel="stylesheet" href="/css/main.css" />
+</head>
+<body>
+  <div class="shell" style="max-width: 520px;">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">ATM</div>
+        <span>Cajero automático</span>
+      </div>
+      <a class="btn btn-ghost" href="/login.html">Banca web</a>
+    </header>
+
+    <div id="alert" class="alert alert-error" hidden></div>
+
+    <!-- Login cajero -->
+    <div class="card" id="boxLogin">
+      <h1 style="font-size: 1.4rem; margin-bottom: 0.35rem;">Acceso con tarjeta</h1>
+      <p class="muted" style="margin-top: 0;">Número de cuenta y PIN</p>
+      <form id="formLogin" style="margin-top: 1.25rem;">
+        <label for="cuenta">Número de cuenta</label>
+        <input id="cuenta" required inputmode="numeric" placeholder="1000000000000001" />
+
+        <label for="pin">PIN</label>
+        <input id="pin" type="password" required placeholder="password" autocomplete="off" />
+
+        <button class="btn btn-primary btn-block" type="submit">Continuar</button>
+      </form>
+    </div>
+
+    <!-- Operaciones -->
+    <div id="boxOps" hidden>
+      <div class="card hero-balance" style="margin-bottom: 1rem;">
+        <div class="card-title">Saldo</div>
+        <div class="stat-value" id="saldoAtm">—</div>
+        <p class="muted" id="cuentaAtm" style="margin: 0.4rem 0 0;">—</p>
+      </div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h2 style="font-size: 1.1rem; margin-bottom: 1rem;">Retirar</h2>
+        <form id="formRetiro">
+          <label for="monto">Monto</label>
+          <input id="monto" type="number" min="1" step="1" required placeholder="50000" />
+          <button class="btn btn-primary btn-block" type="submit">Confirmar retiro</button>
+        </form>
+      </div>
+
+      <div class="card" style="margin-bottom: 1rem;">
+        <h2 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Últimos movimientos</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Fecha</th><th>Tipo</th><th>Monto</th></tr>
+            </thead>
+            <tbody id="movAtm"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <button class="btn btn-ghost btn-block" type="button" id="btnSalirCajero">Salir del cajero</button>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const alertEl = document.getElementById('alert');
+    const boxLogin = document.getElementById('boxLogin');
+    const boxOps = document.getElementById('boxOps');
+
+    async function refreshOps() {
+      const saldo = await API.cajeroSaldo();
+      document.getElementById('saldoAtm').textContent = formatMoney(saldo.saldo);
+      document.getElementById('cuentaAtm').textContent = 'Cuenta ' + saldo.numero_cuenta;
+
+      const movs = await API.cajeroMovimientos();
+      const body = document.getElementById('movAtm');
+      body.innerHTML = movs.length
+        ? movs.map((m) => `
+            <tr>
+              <td>${formatDate(m.created_at)}</td>
+              <td>${m.tipo}</td>
+              <td>${formatMoney(m.monto)}</td>
+            </tr>`).join('')
+        : '<tr><td colspan="3" class="empty">Sin movimientos</td></tr>';
+    }
+
+    document.getElementById('formLogin').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert(alertEl);
+      try {
+        await API.cajeroLogin(
+          document.getElementById('cuenta').value.trim(),
+          document.getElementById('pin').value
+        );
+        boxLogin.hidden = true;
+        boxOps.hidden = false;
+        await refreshOps();
+      } catch (err) {
+        showAlert(alertEl, err.message);
+      }
+    });
+
+    document.getElementById('formRetiro').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert(alertEl);
+      try {
+        const data = await API.cajeroRetirar(document.getElementById('monto').value);
+        showAlert(
+          alertEl,
+          `${data.mensaje}. Nuevo saldo: ${formatMoney(data.saldo_nuevo)}`,
+          'ok'
+        );
+        e.target.reset();
+        await refreshOps();
+      } catch (err) {
+        showAlert(alertEl, err.message);
+      }
+    });
+
+    document.getElementById('btnSalirCajero').addEventListener('click', async () => {
+      try { await API.cajeroLogout(); } catch (_) {}
+      boxOps.hidden = true;
+      boxLogin.hidden = false;
+      hideAlert(alertEl);
+    });
+  </script>
+</body>
+</html>

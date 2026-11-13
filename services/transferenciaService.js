@@ -1,6 +1,10 @@
 const db = require('../config/db');
 const accountModel = require('../models/accountModel');
 
+function isActiva(estado) {
+  return estado === 'ACTIVO' || estado === 'ACTIVA';
+}
+
 async function transferir(usuarioId, numeroCuentaDestino, monto, descripcion = '') {
   const cantidad = Number(monto);
   if (!cantidad || cantidad <= 0) {
@@ -21,7 +25,7 @@ async function transferir(usuarioId, numeroCuentaDestino, monto, descripcion = '
     throw err;
   }
 
-  const destino = await accountModel.findByNumeroCuenta(numeroCuentaDestino);
+  const destino = await accountModel.findByNumeroCuenta(String(numeroCuentaDestino).trim());
   if (!destino) {
     const err = new Error('Cuenta destino no encontrada');
     err.status = 404;
@@ -34,8 +38,7 @@ async function transferir(usuarioId, numeroCuentaDestino, monto, descripcion = '
     throw err;
   }
 
-  const estadoOk = (e) => e === 'ACTIVO' || e === 'ACTIVA';
-  if (!estadoOk(origen.estado) || !estadoOk(destino.estado)) {
+  if (!isActiva(origen.estado) || !isActiva(destino.estado)) {
     const err = new Error('Ambas cuentas deben estar activas');
     err.status = 403;
     throw err;
@@ -66,21 +69,36 @@ async function transferir(usuarioId, numeroCuentaDestino, monto, descripcion = '
     const saldoDestinoAnt = Number(cDestino.saldo);
     const saldoDestinoPost = saldoDestinoAnt + cantidad;
 
-    await conn.query('UPDATE cuentas SET saldo = ? WHERE id = ?', [saldoOrigenPost, origen.id]);
-    await conn.query('UPDATE cuentas SET saldo = ? WHERE id = ?', [saldoDestinoPost, destino.id]);
+    await conn.query('UPDATE cuentas SET saldo = ? WHERE id = ?', [
+      saldoOrigenPost,
+      origen.id
+    ]);
+    await conn.query('UPDATE cuentas SET saldo = ? WHERE id = ?', [
+      saldoDestinoPost,
+      destino.id
+    ]);
 
     const desc = descripcion || `Transferencia a ${destino.numero_cuenta}`;
 
     await conn.query(
-      `INSERT INTO movimientos (cuenta_id, tipo_movimiento, monto, saldo_anterior, saldo_posterior, cuenta_destino_id, descripcion)
+      `INSERT INTO movimientos
+        (cuenta_id, tipo_movimiento, monto, saldo_anterior, saldo_posterior, cuenta_destino_id, descripcion)
        VALUES (?, 'TRANSFERENCIA_SALIDA', ?, ?, ?, ?, ?)`,
       [origen.id, cantidad, saldoOrigenAnt, saldoOrigenPost, destino.id, desc]
     );
 
     await conn.query(
-      `INSERT INTO movimientos (cuenta_id, tipo_movimiento, monto, saldo_anterior, saldo_posterior, cuenta_destino_id, descripcion)
+      `INSERT INTO movimientos
+        (cuenta_id, tipo_movimiento, monto, saldo_anterior, saldo_posterior, cuenta_destino_id, descripcion)
        VALUES (?, 'TRANSFERENCIA_ENTRADA', ?, ?, ?, ?, ?)`,
-      [destino.id, cantidad, saldoDestinoAnt, saldoDestinoPost, origen.id, `Transferencia desde ${origen.numero_cuenta}`]
+      [
+        destino.id,
+        cantidad,
+        saldoDestinoAnt,
+        saldoDestinoPost,
+        origen.id,
+        `Transferencia desde ${origen.numero_cuenta}`
+      ]
     );
 
     await conn.commit();

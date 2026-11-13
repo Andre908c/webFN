@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin · Simulador Bancario</title>
+  <link rel="stylesheet" href="/css/main.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">AD</div>
+        <span>Panel administración</span>
+      </div>
+      <div class="nav-actions">
+        <span class="muted" id="adminName">—</span>
+        <button class="btn btn-ghost" type="button" id="btnLogout">Salir</button>
+      </div>
+    </header>
+
+    <div id="alert" class="alert alert-error" hidden></div>
+
+    <div class="tabs">
+      <button type="button" class="tab active" data-tab="dash">Dashboard</button>
+      <button type="button" class="tab" data-tab="clientes">Clientes</button>
+      <button type="button" class="tab" data-tab="crear">Crear cliente</button>
+      <button type="button" class="tab" data-tab="consignar">Consignar</button>
+      <button type="button" class="tab" data-tab="movs">Movimientos</button>
+    </div>
+
+    <section id="panel-dash" class="panel active">
+      <div class="grid grid-3" id="dashCards">
+        <div class="card"><div class="card-title">Clientes</div><div class="stat-value" id="dTotal">—</div></div>
+        <div class="card"><div class="card-title">Activos</div><div class="stat-value text-ok" id="dActivos">—</div></div>
+        <div class="card"><div class="card-title">Bloqueados</div><div class="stat-value text-danger" id="dBloq">—</div></div>
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="card-title">Saldo total del sistema</div>
+          <div class="stat-value" id="dSaldo">—</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-clientes" class="panel">
+      <div class="card">
+        <div style="display:flex; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+          <input id="buscar" placeholder="Buscar nombre, email o cuenta" style="margin:0; flex:1; min-width:200px;" />
+          <button class="btn btn-ghost" type="button" id="btnBuscar">Buscar</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Cuenta</th>
+                <th>Saldo</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="clientesBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-crear" class="panel">
+      <div class="card" style="max-width: 520px;">
+        <h2 style="margin-bottom: 1rem;">Nuevo cliente</h2>
+        <form id="formCrear">
+          <label>Nombre</label>
+          <input name="nombre" required />
+          <label>Email</label>
+          <input name="email" type="email" required />
+          <label>Contraseña</label>
+          <input name="password" type="password" required minlength="6" />
+          <label>Número de cuenta</label>
+          <input name="numero_cuenta" required placeholder="1000000000000099" />
+          <label>Saldo inicial</label>
+          <input name="saldo_inicial" type="number" min="0" value="0" />
+          <label>PIN</label>
+          <input name="pin" value="password" />
+          <button class="btn btn-primary" type="submit">Crear</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="panel-consignar" class="panel">
+      <div class="card" style="max-width: 480px;">
+        <h2 style="margin-bottom: 1rem;">Consignación</h2>
+        <form id="formConsignar">
+          <label>Número de cuenta</label>
+          <input id="consCuenta" required />
+          <label>Monto</label>
+          <input id="consMonto" type="number" min="1" required />
+          <label>Descripción</label>
+          <input id="consDesc" placeholder="Consignación administrativa" />
+          <button class="btn btn-primary" type="submit">Consignar</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="panel-movs" class="panel">
+      <div class="card">
+        <h2 style="margin-bottom: 1rem;">Movimientos globales</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Cuenta</th>
+                <th>Tipo</th>
+                <th>Monto</th>
+                <th>Descripción</th>
+              </tr>
+            </thead>
+            <tbody id="movsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const alertEl = document.getElementById('alert');
+
+    document.querySelectorAll('.tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    async function requireAdmin() {
+      try {
+        const { user } = await API.me();
+        if (user.rol !== 'ADMIN') {
+          location.href = user.rol === 'CLIENTE' ? '/cliente/' : '/login.html';
+          return null;
+        }
+        document.getElementById('adminName').textContent = user.nombre;
+        return user;
+      } catch {
+        location.href = '/login.html';
+        return null;
+      }
+    }
+
+    async function loadDash() {
+      const d = await API.adminDashboard();
+      document.getElementById('dTotal').textContent = d.total_clientes;
+      document.getElementById('dActivos').textContent = d.activos;
+      document.getElementById('dBloq').textContent = d.bloqueados;
+      document.getElementById('dSaldo').textContent = formatMoney(d.saldo_total);
+    }
+
+    function badgeEstado(estado) {
+      if (estado === 'ACTIVO') return '<span class="badge badge-ok">ACTIVO</span>';
+      if (estado === 'BLOQUEADO') return '<span class="badge badge-danger">BLOQUEADO</span>';
+      return '<span class="badge badge-muted">' + (estado || '—') + '</span>';
+    }
+
+    async function loadClientes(q = '') {
+      const rows = await API.adminClientes(q);
+      const body = document.getElementById('clientesBody');
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="7" class="empty">Sin resultados</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map((c) => `
+        <tr>
+          <td>${c.id}</td>
+          <td>${c.nombre}</td>
+          <td>${c.email}</td>
+          <td>${c.numero_cuenta || '—'}</td>
+          <td>${c.saldo != null ? formatMoney(c.saldo) : '—'}</td>
+          <td>${badgeEstado(c.estado)}</td>
+          <td>
+            <button class="btn btn-ghost" type="button" data-id="${c.id}" data-estado="ACTIVO" style="min-height:36px;padding:0.25rem 0.5rem;font-size:0.8rem;">Activar</button>
+            <button class="btn btn-danger" type="button" data-id="${c.id}" data-estado="BLOQUEADO" style="min-height:36px;padding:0.25rem 0.5rem;font-size:0.8rem;">Bloquear</button>
+          </td>
+        </tr>
+      `).join('');
+
+      body.querySelectorAll('button[data-id]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          hideAlert(alertEl);
+          try {
+            await API.adminEstado(btn.dataset.id, btn.dataset.estado);
+            showAlert(alertEl, 'Estado actualizado', 'ok');
+            await loadClientes(document.getElementById('buscar').value.trim());
+            await loadDash();
+          } catch (err) {
+            showAlert(alertEl, err.message);
+          }
+        });
+      });
+    }
+
+    async function loadMovs() {
+      const rows = await API.adminMovimientos(40);
+      const body = document.getElementById('movsBody');
+      body.innerHTML = rows.length
+        ? rows.map((m) => `
+            <tr>
+              <td>${formatDate(m.created_at)}</td>
+              <td>${m.numero_cuenta}</td>
+              <td>${m.tipo}</td>
+              <td>${formatMoney(m.monto)}</td>
+              <td>${m.descripcion || '—'}</td>
+            </tr>`).join('')
+        : '<tr><td colspan="5" class="empty">Sin movimientos</td></tr>';
+    }
+
+    document.getElementById('btnBuscar').addEventListener('click', () => {
+      loadClientes(document.getElementById('buscar').value.trim());
+    });
+
+    document.getElementById('formCrear').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert(alertEl);
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      payload.saldo_inicial = Number(payload.saldo_inicial) || 0;
+      try {
+        const data = await API.adminCrearCliente(payload);
+        showAlert(alertEl, `Cliente creado (id ${data.id})`, 'ok');
+        e.target.reset();
+        await loadClientes();
+        await loadDash();
+      } catch (err) {
+        showAlert(alertEl, err.message);
+      }
+    });
+
+    document.getElementById('formConsignar').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert(alertEl);
+      try {
+        const data = await API.adminConsignar({
+          numero_cuenta: document.getElementById('consCuenta').value.trim(),
+          monto: document.getElementById('consMonto').value,
+          descripcion: document.getElementById('consDesc').value.trim() || undefined
+        });
+        showAlert(alertEl, `Consignado. Nuevo saldo: ${formatMoney(data.saldo_nuevo)}`, 'ok');
+        e.target.reset();
+        await loadDash();
+        await loadMovs();
+      } catch (err) {
+        showAlert(alertEl, err.message);
+      }
+    });
+
+    document.getElementById('btnLogout').addEventListener('click', async () => {
+      try { await API.logout(); } catch (_) {}
+      location.href = '/login.html';
+    });
+
+    (async () => {
+      const user = await requireAdmin();
+      if (!user) return;
+      try {
+        await loadDash();
+        await loadClientes();
+        await loadMovs();
+      } catch (err) {
+        showAlert(alertEl, err.message);
+      }
+    })();
+  </script>
+</body>
+</html>
