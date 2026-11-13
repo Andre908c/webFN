@@ -1,5 +1,8 @@
 require('dotenv').config();
 
+const adminRoutes = require('./routes/adminRoutes');
+app.use('/api/admin', adminRoutes);
+
 const express = require('express');
 const session = require('express-session');
 const path = require('path');

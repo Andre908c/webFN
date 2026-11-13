@@ -1,4 +1,5 @@
 const clienteService = require('../services/clienteService');
+const transferenciaService = require('../services/transferenciaService');
 
 async function perfil(req, res) {
   try {
@@ -54,10 +55,26 @@ async function cambiarPassword(req, res) {
   }
 }
 
+async function transferir(req, res) {
+  try {
+    const { numero_cuenta_destino, monto, descripcion } = req.body;
+    const data = await transferenciaService.transferir(
+      req.session.user.id,
+      numero_cuenta_destino,
+      monto,
+      descripcion
+    );
+    res.json(data);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+}
+
 module.exports = {
   perfil,
   saldo,
   movimientos,
   actualizarPerfil,
-  cambiarPassword
+  cambiarPassword,
+  transferir
 };
