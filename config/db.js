@@ -1,30 +1,14 @@
-const mysql = require('mysql2/promise');
-require('dotenv').config();
+const mysql = require('mysql2');
 
-// En Railway lo ideal es MYSQL_URL (la da el plugin MySQL).
-function buildPoolConfig() {
-  if (process.env.MYSQL_URL || process.env.DATABASE_URL) {
-    return process.env.MYSQL_URL || process.env.DATABASE_URL;
-  }
+// Node.js lee automáticamente la MYSQL_URL que guardaste en el panel de Railway
+const connectionConfig = process.env.MYSQL_URL || {
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'banco_db',
+    port: 3306
+};
 
-  return {
-    host: process.env.DB_HOST || process.env.MYSQLHOST || '127.0.0.1',
-    port: Number(process.env.DB_PORT || process.env.MYSQLPORT) || 3306,
-    user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
-    password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
-    database:
-      process.env.DB_NAME ||
-      process.env.MYSQLDATABASE ||
-      process.env.MYSQL_DATABASE ||
-      'simulador_banco',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 0
-  };
-}
+const pool = mysql.createPool(connectionConfig);
 
-const pool = mysql.createPool(buildPoolConfig());
-
-module.exports = pool;
+module.exports = pool.promise();
