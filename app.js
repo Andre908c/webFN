@@ -8,11 +8,12 @@ const db = require('./config/db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middlewares para parsing de requests
+// Railway / proxy: necesario para cookies secure
+app.set('trust proxy', 1);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configuración de sesiones
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'banco_default_secret_key_change_in_production',
@@ -21,7 +22,8 @@ app.use(
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 1000 * 60 * 60 * 2 // 2 horas
+      sameSite: 'lax',
+      maxAge: 1000 * 60 * 60 * 2
     }
   })
 );
