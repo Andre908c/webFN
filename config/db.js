@@ -1,14 +1,12 @@
 const mysql = require('mysql2');
 
-const pool = mysql.createPool({
-    host: process.env.MYSQLHOST,
-    user: process.env.MYSQLUSER,
-    password: process.env.MYSQLPASSWORD,
-    database: process.env.MYSQL_DATABASE,
-    port: Number(process.env.MYSQLPORT) || 3306,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
+// Se conecta usando estrictamente la URL completa de Railway
+const pool = mysql.createPool(process.env.MYSQL_URL || {
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'banco_db',
+    port: 3306
 });
 
 module.exports = pool.promise();
