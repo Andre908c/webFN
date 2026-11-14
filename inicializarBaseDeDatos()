@@ -1,0 +1,32 @@
+const pool = require('./config/db');
+
+async function inicializarBaseDeDatos() {
+    try {
+        const connection = await pool.getConnection();
+        
+        // Crear tabla de usuarios
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                correo VARCHAR(255) NOT NULL UNIQUE,
+                contrasena VARCHAR(255) NOT NULL,
+                nombre VARCHAR(255),
+                rol VARCHAR(50) DEFAULT 'cliente'
+            );
+        `);
+
+        // Insertar usuario administrador por defecto
+        await connection.query(`
+            INSERT IGNORE INTO usuarios (id, correo, contrasena, nombre, rol) 
+            VALUES (1, 'admin@banco.test', '123456', 'Administrador', 'admin');
+        `);
+
+        connection.release();
+        console.log("¡Tablas y datos iniciales creados correctamente en la base de datos!");
+    } catch (error) {
+        console.error("Error al inicializar la base de datos:", error);
+    }
+}
+
+// LLAMADA OBLIGATORIA al arrancar
+inicializarBaseDeDatos();
