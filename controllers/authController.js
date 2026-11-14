@@ -1,54 +1,55 @@
-const authService = require('../services/authService');
+const pool = require('../config/db'); // O la ruta donde tengas tu conexión a MySQL
+const bcrypt = require('bcrypt');
 
-async function login(req, res) {
-  try {
-    const { email, password } = req.body;
-    const user = await authService.login(email, password);
+async function login(email, password) {
+  // 1. Buscar el usuario por email
+  const [rows] = await pool.query(
+    'SELECT * FROM usuarios WHERE email = ?', 
+    [email]
+  );
 
-    req.session.user = {
-      id: user.id,
-      nombre: user.nombre,
-      email: user.email,
-      rol: user.rol,
-      estado: user.estado,
-      cuenta: user.cuenta
-    };
-
-    return res.json({
-      message: 'Login exitoso',
-      user: {
-        id: user.id,
-        nombre: user.nombre,
-        email: user.email,
-        rol: user.rol,
-        cuenta: user.cuenta
-      }
-    });
-  } catch (err) {
-    const status = err.status || 500;
-    return res.status(status).json({ error: err.message || 'Error interno' });
+  if (rows.length === 0) {
+    const error = new Error('Credenciales inválidas');
+    error.status = 401;
+    throw error;
   }
-}
 
-function logout(req, res) {
-  req.session.destroy((err) => {
-    if (err) {
-      return res.status(500).json({ error: 'No se pudo cerrar la sesión' });
-    }
-    res.clearCookie('connect.sid');
-    return res.json({ message: 'Sesión cerrada' });
-  });
-}
+  const user = rows[0];
 
-function me(req, res) {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ error: 'No autenticado' });
+  // 2. Verificar estado activo
+  if (user.estado && user.estado !== 'activo') {
+    const error = new Error('Usuario inactivo o suspendido');
+    error.status = 403;
+    throw error;
   }
-  return res.json({ user: req.session.user });
+
+  // 3. Validar contraseña (soporta tanto texto plano como hash de bcrypt por seguridad)
+  let isValidPassword = false;
+  
+  if (user.password_hash.startsWith('$2b$') || user.password_hash.startsWith('$2a$')) {
+    isValidPassword = await bcrypt.compare(password, user.password_hash);
+  } else {
+    // Si por alguna razón quedó en texto plano en la BD
+    isValidPassword = (password === user.password_hash);
+  }
+
+  if (!isValidPassword) {
+    const error = new Error('Credenciales inválidas');
+    error.status = 401;
+    throw error;
+  }
+
+  // 4. Buscar la cuenta bancaria asociada al usuario
+  const [cuentasRows] = await pool.query(
+    'SELECT numero_cuenta FROM cuentas WHERE usuario_id = ? LIMIT 1',
+    [user.id]
+  );
+
+  user.cuenta = cuentasRows.length > 0 ? cuentasRows[0].numero_cuenta : null;
+
+  return user;
 }
 
 module.exports = {
-  login,
-  logout,
-  me
+  login
 };
