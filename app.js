@@ -87,3 +87,33 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 module.exports = app;
+
+const pool = require('./config/db');
+
+async function inicializarBaseDeDatos() {
+    try {
+        const connection = await pool.getConnection();
+
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                correo VARCHAR(255) NOT NULL UNIQUE,
+                contrasena VARCHAR(255) NOT NULL,
+                nombre VARCHAR(255),
+                rol VARCHAR(50) DEFAULT 'cliente'
+            );
+        `);
+
+        await connection.query(`
+            INSERT IGNORE INTO usuarios (id, correo, contrasena, nombre, rol) 
+            VALUES (1, 'admin@banco.test', '123456', 'Administrador', 'admin');
+        `);
+
+        connection.release();
+        console.log("Tablas y datos iniciales creados correctamente.");
+    } catch (error) {
+        console.error("Error al inicializar la base de datos:", error);
+    }
+}
+
+inicializarBaseDeDatos();
